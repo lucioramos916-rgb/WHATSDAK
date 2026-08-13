@@ -451,250 +451,234 @@
     </div>
 
     <script>
-                if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js', { scope: '/' })
-                    .then((reg) => console.log('SW registrado con éxito:', reg.scope))
-                    .catch((err) => console.error('Fallo al registrar SW:', err));
-            });
-        }
+        if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' })
+            .then((reg) => console.log('SW registrado con éxito:', reg.scope))
+            .catch((err) => console.error('Fallo al registrar SW:', err));
+    });
+}
 
-        const socket = io();
-        let myName = "";
-        let myReadingLanguage = "es";
+const socket = io();
+let myName = "";
+let myReadingLanguage = "es";
 
-        const loginScreen = document.getElementById('login-screen');
-        const contactsScreen = document.getElementById('contacts-screen');
-        const chatScreen = document.getElementById('chat-screen');
-        const messagesContainer = document.getElementById('messages-container');
-        const messageInput = document.getElementById('message-input');
-        const userIdentifier = document.getElementById('user-identifier');
-        const typingIndicator = document.getElementById('typing-indicator');
+const loginScreen = document.getElementById('login-screen');
+const contactsScreen = document.getElementById('contacts-screen');
+const chatScreen = document.getElementById('chat-screen');
+const messagesContainer = document.getElementById('messages-container');
+const messageInput = document.getElementById('message-input');
+const userIdentifier = document.getElementById('user-identifier');
+const typingIndicator = document.getElementById('typing-indicator');
 
-        // --- 1. PERSISTENCIA DE SESIÓN AL CARGAR ---
-        window.addEventListener('DOMContentLoaded', () => {
-            const savedName = localStorage.getItem('whatsapp_username');
-            if (savedName) {
-                myName = savedName;
-                myReadingLanguage = (myName.toLowerCase() === 'lucio') ? 'en' : 'es';
-                if (userIdentifier) userIdentifier.innerText = myName;
+// --- 1. PERSISTENCIA DE SESIÓN AL CARGAR ---
+window.addEventListener('DOMContentLoaded', () => {
+    const savedName = localStorage.getItem('whatsapp_username');
+    if (savedName) {
+        myName = savedName;
+        myReadingLanguage = (myName.toLowerCase() === 'lucio') ? 'en' : 'es';
+        if (userIdentifier) userIdentifier.innerText = myName;
 
-                if (loginScreen) loginScreen.classList.add('hidden');
-                if (contactsScreen) contactsScreen.classList.remove('hidden');
+        if (loginScreen) loginScreen.classList.add('hidden');
+        if (contactsScreen) contactsScreen.classList.remove('hidden');
 
-                loadLocalHistory();
-            }
-        });
+        loadLocalHistory();
+    }
+});
 
-        if ("Notification" in window && Notification.permission !== "granted") {
-            Notification.requestPermission();
-        }
+if ("Notification" in window && Notification.permission !== "granted") {
+    Notification.requestPermission();
+}
 
-        // --- 2. LOGIN ACTUALIZADO CON PERSISTENCIA ---
-        async function joinChat() {
-            const nameInput = document.getElementById('login-name').value.trim();
-            if (!nameInput) {
-                alert("Debes ingresar un nombre.");
-                return;
-            }
+// --- 2. LOGIN ACTUALIZADO CON PERSISTENCIA ---
+async function joinChat() {
+    const nameInput = document.getElementById('login-name').value.trim();
+    if (!nameInput) {
+        alert("Debes ingresar un nombre.");
+        return;
+    }
 
-            myName = nameInput;
-            myReadingLanguage = (myName.toLowerCase() === 'lucio') ? 'en' : 'es';
-            if (userIdentifier) userIdentifier.innerText = myName;
+    myName = nameInput;
+    myReadingLanguage = (myName.toLowerCase() === 'lucio') ? 'en' : 'es';
+    if (userIdentifier) userIdentifier.innerText = myName;
 
-            // Guardar sesión para no pedirlo más
-            localStorage.setItem('whatsapp_username', myName);
+    localStorage.setItem('whatsapp_username', myName);
 
-            if (loginScreen) loginScreen.classList.add('hidden');
-            if (contactsScreen) contactsScreen.classList.remove('hidden');
+    if (loginScreen) loginScreen.classList.add('hidden');
+    if (contactsScreen) contactsScreen.classList.remove('hidden');
 
-            try {
-                await suscribirAPush(myName);
-            } catch (error) {
-                console.warn("Aviso Push:", error);
-            }
-        }
+    try {
+        await suscribirAPush(myName);
+    } catch (error) {
+        console.warn("Aviso Push:", error);
+    }
+}
 
-        function openChatRoom(roomName) {
-            if (contactsScreen) contactsScreen.classList.add('hidden');
-            if (chatScreen) chatScreen.classList.remove('hidden');
-            const titleEl = document.getElementById('active-chat-title');
-            if (titleEl) titleEl.innerText = roomName;
-            if (messagesContainer) messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        }
+function openChatRoom(roomName) {
+    if (contactsScreen) contactsScreen.classList.add('hidden');
+    if (chatScreen) chatScreen.classList.remove('hidden');
+    const titleEl = document.getElementById('active-chat-title');
+    if (titleEl) titleEl.innerText = roomName;
+    if (messagesContainer) messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
 
-        function goToContacts() {
-            if (chatScreen) chatScreen.classList.add('hidden');
-            if (contactsScreen) contactsScreen.classList.remove('hidden');
-        }
+function goToContacts() {
+    if (chatScreen) chatScreen.classList.add('hidden');
+    if (contactsScreen) contactsScreen.classList.remove('hidden');
+}
 
-        // --- 3. CONTROL DEL MENÚ DE 3 PUNTOS Y VACIAR CHAT ---
-        function toggleMenu(event) {
-            event.stopPropagation();
-            const menu = document.getElementById('dropdown-menu');
-            if (menu) menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
-        }
+// --- 3. CONTROL DEL MENÚ DE 3 PUNTOS Y VACIAR CHAT ---
+function toggleMenu(event) {
+    event.stopPropagation();
+    const menu = document.getElementById('dropdown-menu');
+    if (menu) menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+}
 
-        window.addEventListener('click', () => {
-            const menu = document.getElementById('dropdown-menu');
-            if (menu) menu.style.display = 'none';
-        });
+window.addEventListener('click', () => {
+    const menu = document.getElementById('dropdown-menu');
+    if (menu) menu.style.display = 'none';
+});
 
-        function clearChat() {
-            if (messagesContainer) messagesContainer.innerHTML = '';
-            localStorage.removeItem('whatsapp_chat_history');
-            const menu = document.getElementById('dropdown-menu');
-            if (menu) menu.style.display = 'none';
-        }
+function clearChat() {
+    if (messagesContainer) messagesContainer.innerHTML = '';
+    localStorage.removeItem('whatsapp_chat_history');
+    const menu = document.getElementById('dropdown-menu');
+    if (menu) menu.style.display = 'none';
+}
 
-        // --- 4. PERSISTENCIA LOCAL DE MENSAJES ---
-        function saveMessageToLocal(htmlContent) {
-            let history = JSON.parse(localStorage.getItem('whatsapp_chat_history') || '[]');
-            history.push(htmlContent);
-            localStorage.setItem('whatsapp_chat_history', JSON.stringify(history));
-        }
+// --- 4. PERSISTENCIA LOCAL DE MENSAJES ---
+function saveMessageToLocal(htmlContent) {
+    let history = JSON.parse(localStorage.getItem('whatsapp_chat_history') || '[]');
+    history.push(htmlContent);
+    localStorage.setItem('whatsapp_chat_history', JSON.stringify(history));
+}
 
-        function loadLocalHistory() {
-            let history = JSON.parse(localStorage.getItem('whatsapp_chat_history') || '[]');
-            if (messagesContainer) {
-                messagesContainer.innerHTML = '';
-                history.forEach(html => {
-                    const msgDiv = document.createElement('div');
-                    msgDiv.innerHTML = html;
-                    messagesContainer.appendChild(msgDiv.firstElementChild);
-                });
-                messagesContainer.scrollTop = messagesContainer.scrollHeight;
-            }
-        }
-
-        function sendMessage() {
-            const text = messageInput.value.trim();
-            if (!text) return;
-
-            socket.emit('chat message', { user: myName, text: text });
-            messageInput.value = '';
-            socket.emit('stop typing', { user: myName });
-        }
-
-        if (messageInput) {
-            messageInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') sendMessage();
-            });
-
-            let typingTimeout;
-            messageInput.addEventListener('input', () => {
-                socket.emit('typing', { user: myName });
-                clearTimeout(typingTimeout);
-                typingTimeout = setTimeout(() => {
-                    socket.emit('stop typing', { user: myName });
-                }, 1000);
-            });
-        }
-
-       // --- 5. SOCKET.ON MODIFICADO CON SOPORTE DE AUDIO Y PERSISTENCIA ---
-        socket.on('chat message', (data) => {
-            const msgDiv = document.createElement('div');
-            msgDiv.classList.add('message');
-            
-            if (data.user === myName) {
-                msgDiv.classList.add('sent');
-            } else {
-                msgDiv.classList.add('received');
-            }
-
-            // Si es un mensaje de audio, mostramos el reproductor; si es texto, mostramos el texto traducido
-            if (data.isAudio) {
-                msgDiv.innerHTML = `
-                    <span class="user-tag">${data.user}</span>
-                    <div style="display: flex; align-items: center; gap: 10px; min-width: 150px; padding: 4px 0;">
-                        <button onclick="playAudio(this, '${data.audioUrl}')" style="background: var(--text-main); color: var(--bg-main); border: none; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer;">
-                            ▶
-                        </button>
-                        <div style="flex: 1; height: 4px; background: rgba(255,255,255,0.2); border-radius: 2px; position: relative;">
-                            <div style="width: 0%; height: 100%; background: currentColor; border-radius: 2px;"></div>
-                        </div>
-                    </div>
-                    <span style="font-size: 10px; opacity: 0.6; align-self: flex-end;">Audio</span>
-                `;
-            } else {
-                const textToShow = myReadingLanguage === 'en' ? data.text_en : data.text_es;
-                msgDiv.innerHTML = `<span class="user-tag">${data.user}</span><span>${textToShow}</span>`;
-            }
-
-            if (messagesContainer) {
-                messagesContainer.appendChild(msgDiv);
-                messagesContainer.scrollTop = messagesContainer.scrollHeight;
-            }
-
-            // Guardar en el historial local (mantiene tu función intacta)
-            saveMessageToLocal(msgDiv.outerHTML);
-        });
-
-        socket.on('typing', (data) => {
-            if (data.user !== myName && typingIndicator) {
-                typingIndicator.innerText = `${data.user} está escribiendo...`;
-            }
-        });
-
-        socket.on('stop typing', (data) => {
-            if (data.user !== myName && typingIndicator) {
-                typingIndicator.innerText = '';
-            }
-        });
-
-        async function suscribirAPush(nombreUsuario) {
-            if ('serviceWorker' in navigator) {
-                const registration = await navigator.serviceWorker.ready;
-                const publicVapidKey = 'BJMPG84wwiQAVAEAl5a2la4cbpssS6ODOyIsLeh-ea6KhoGiXEXWGw22SxyE6hc6SlO9SQGG9-TV7VDIWJDZojg';
-
-                function urlBase64ToUint8Array(base64String) {
-                    const padding = '='.repeat((4 - base64String.length % 4) % 4);
-                    const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
-                    const rawData = window.atob(base64);
-                    const outputArray = new Uint8Array(rawData.length);
-                    for (let i = 0; i < rawData.length; ++i) {
-                        outputArray[i] = rawData.charCodeAt(i);
-                    }
-                    return outputArray;
-                }
-
-                const subscription = await registration.pushManager.subscribe({
-                    userVisibleOnly: true,
-                    applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
-                });
-
-                await fetch('/subscribe', {
-                    method: 'POST',
-                    body: JSON.stringify({ user: nombreUsuario, subscription }),
-                    headers: { 'content-type': 'application/json' }
-                });
-            }
-        }
-
-        // --- RENDERIZAR Y REPRODUCIR NOTAS DE VOZ ---
-function renderVoiceMessage(audioUrl, sender, isSentByMe) {
-    const msgDiv = document.createElement('div');
-    msgDiv.classList.add('message', isSentByMe ? 'sent' : 'received');
-    
-    msgDiv.innerHTML = `
-        <span class="user-tag">${sender}</span>
-        <div style="display: flex; align-items: center; gap: 10px; min-width: 150px; padding: 4px 0;">
-            <button onclick="playAudio(this, '${audioUrl}')" style="background: var(--text-main); color: var(--bg-main); border: none; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer;">
-                ▶
-            </button>
-            <div style="flex: 1; height: 4px; background: rgba(255,255,255,0.2); border-radius: 2px; position: relative;">
-                <div style="width: 0%; height: 100%; background: currentColor; border-radius: 2px;"></div>
-            </div>
-        </div>
-        <span style="font-size: 10px; opacity: 0.6; align-self: flex-end;">Audio</span>
-    `;
-    
+function loadLocalHistory() {
+    let history = JSON.parse(localStorage.getItem('whatsapp_chat_history') || '[]');
     if (messagesContainer) {
-        messagesContainer.appendChild(msgDiv);
+        messagesContainer.innerHTML = '';
+        history.forEach(html => {
+            const msgDiv = document.createElement('div');
+            msgDiv.innerHTML = html;
+            messagesContainer.appendChild(msgDiv.firstElementChild);
+        });
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
 }
 
+function sendMessage() {
+    const text = messageInput.value.trim();
+    if (!text) return;
+
+    socket.emit('chat message', { user: myName, text: text });
+    messageInput.value = '';
+    socket.emit('stop typing', { user: myName });
+}
+
+if (messageInput) {
+    messageInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') sendMessage();
+    });
+
+    let typingTimeout;
+    messageInput.addEventListener('input', () => {
+        socket.emit('typing', { user: myName });
+        clearTimeout(typingTimeout);
+        typingTimeout = setTimeout(() => {
+            socket.emit('stop typing', { user: myName });
+        }, 1000);
+    });
+}
+
+// --- 5. SOCKET.ON CON TRADUCCIÓN, AUDIO Y SÍNTESIS DE VOZ AUTOMÁTICA ---
+socket.on('chat message', (data) => {
+    const msgDiv = document.createElement('div');
+    msgDiv.classList.add('message');
+    
+    if (data.user === myName) {
+        msgDiv.classList.add('sent');
+    } else {
+        msgDiv.classList.add('received');
+    }
+
+    if (data.isAudio) {
+        msgDiv.innerHTML = `
+            <span class="user-tag">${data.user}</span>
+            <div style="display: flex; align-items: center; gap: 10px; min-width: 150px; padding: 4px 0;">
+                <button onclick="playAudio(this, '${data.audioUrl}')" style="background: var(--text-main); color: var(--bg-main); border: none; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+                    ▶
+                </button>
+                <div style="flex: 1; height: 4px; background: rgba(255,255,255,0.2); border-radius: 2px; position: relative;">
+                    <div style="width: 0%; height: 100%; background: currentColor; border-radius: 2px;"></div>
+                </div>
+            </div>
+            <span style="font-size: 10px; opacity: 0.6; align-self: flex-end;">Audio</span>
+        `;
+    } else {
+        const textToShow = myReadingLanguage === 'en' ? data.text_en : data.text_es;
+        msgDiv.innerHTML = `<span class="user-tag">${data.user}</span><span>${textToShow}</span>`;
+
+        // Si el mensaje viene del OTRO usuario, su dispositivo lo lee en voz alta automáticamente
+        if (data.user !== myName) {
+            if ('speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance(textToShow);
+                utterance.lang = myReadingLanguage === 'en' ? 'en-US' : 'es-ES';
+                utterance.rate = 1.0;
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+    }
+
+    if (messagesContainer) {
+        messagesContainer.appendChild(msgDiv);
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+    saveMessageToLocal(msgDiv.outerHTML);
+});
+
+socket.on('typing', (data) => {
+    if (data.user !== myName && typingIndicator) {
+        typingIndicator.innerText = `${data.user} está escribiendo...`;
+    }
+});
+
+socket.on('stop typing', (data) => {
+    if (data.user !== myName && typingIndicator) {
+        typingIndicator.innerText = '';
+    }
+});
+
+async function suscribirAPush(nombreUsuario) {
+    if ('serviceWorker' in navigator) {
+        const registration = await navigator.serviceWorker.ready;
+        const publicVapidKey = 'BJMPG84wwiQAVAEAl5a2la4cbpssS6ODOyIsLeh-ea6KhoGiXEXWGw22SxyE6hc6SlO9SQGG9-TV7VDIWJDZojg';
+
+        function urlBase64ToUint8Array(base64String) {
+            const padding = '='.repeat((4 - base64String.length % 4) % 4);
+            const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+            const rawData = window.atob(base64);
+            const outputArray = new Uint8Array(rawData.length);
+            for (let i = 0; i < rawData.length; ++i) {
+                outputArray[i] = rawData.charCodeAt(i);
+            }
+            return outputArray;
+        }
+
+        const subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
+        });
+
+        await fetch('/subscribe', {
+            method: 'POST',
+            body: JSON.stringify({ user: nombreUsuario, subscription }),
+            headers: { 'content-type': 'application/json' }
+        });
+    }
+}
+
+// --- 6. REPRODUCCIÓN DE ARCHIVOS DE AUDIO ---
 function playAudio(btn, url) {
     const audio = new Audio(url);
     audio.play();
@@ -702,59 +686,69 @@ function playAudio(btn, url) {
     audio.onended = () => { btn.innerText = '▶'; };
 }
 
-// --- 2. GRABACIÓN DE AUDIO EN EL CLIENTE ---
-let mediaRecorder;
-let audioChunks = [];
+// --- 7. RECONOCIMIENTO DE VOZ (HABLAR Y TRADUCIR AUTOMÁTICO) ---
+let recognition = null;
 let isRecording = false;
 
-// Esta función la vinculas al botón del micrófono en tu HTML
-async function toggleRecordVoice() {
-    const micBtn = document.getElementById('mic-btn'); // Asegúrate de tener este ID en tu botón de voz, o pásalo por evento
+function toggleRecordVoice() {
+    const micBtn = document.getElementById('mic-btn');
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        alert("Tu navegador no soporta reconocimiento de voz. Usa Google Chrome o Edge.");
+        return;
+    }
 
     if (!isRecording) {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            mediaRecorder = new MediaRecorder(stream);
-            audioChunks = [];
+        recognition = new SpeechRecognition();
+        // Configura el idioma de escucha según el usuario que habla
+        recognition.lang = (myName.toLowerCase() === 'lucio') ? 'en-US' : 'es-ES';
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
 
-            mediaRecorder.ondataavailable = event => {
-                audioChunks.push(event.data);
-            };
-
-            mediaRecorder.onstop = async () => {
-                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                
-                // Preparar los datos para enviarlos por HTTP POST al servidor
-                const formData = new FormData();
-                formData.append('audio', audioBlob, 'voice.webm');
-                formData.append('user', myName);
-
-                console.log("Enviando audio al servidor...");
-                const response = await fetch('/upload-voice', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                const data = await response.json();
-                if (data.success) {
-                    // Renderizamos localmente tu propia nota de voz enviada
-                    renderVoiceMessage(data.audioUrl, myName, true);
-                }
-            };
-
-            mediaRecorder.start();
+        recognition.onstart = () => {
             isRecording = true;
-            if (micBtn) micBtn.style.color = '#ff5252'; // Pone el ícono en rojo indicando que está grabando
-            console.log("Grabando audio...");
-        } catch (err) {
-            console.error("No se pudo acceder al micrófono:", err);
-            alert("Permiso de micrófono denegado o no soportado en este dispositivo.");
-        }
+            if (micBtn) {
+                micBtn.style.background = '#ff5252';
+                micBtn.style.color = '#fff';
+            }
+            console.log("Escuchando voz...");
+        };
+
+        recognition.onresult = (event) => {
+            const speechToText = event.results[0][0].transcript;
+            console.log("Texto detectado por voz:", speechToText);
+
+            // Se envía como mensaje de texto común para que el servidor lo traduzca y notifique
+            socket.emit('chat message', {
+                user: myName,
+                text: speechToText
+            });
+        };
+
+        recognition.onerror = (event) => {
+            console.error("Error en reconocimiento de voz:", event.error);
+            stopRecordingState(micBtn);
+        };
+
+        recognition.onend = () => {
+            stopRecordingState(micBtn);
+        };
+
+        recognition.start();
     } else {
-        mediaRecorder.stop();
-        isRecording = false;
-        if (micBtn) micBtn.style.color = ''; // Vuelve el ícono a la normalidad
-        console.log("Grabación detenida y enviando...");
+        if (recognition) {
+            recognition.stop();
+        }
+        stopRecordingState(micBtn);
+    }
+}
+
+function stopRecordingState(micBtn) {
+    isRecording = false;
+    if (micBtn) {
+        micBtn.style.background = '';
+        micBtn.style.color = '';
     }
 }
     </script>
