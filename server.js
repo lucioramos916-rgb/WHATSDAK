@@ -2,11 +2,16 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const fs = require('fs');
 const webpush = require('web-push');
+const multer = require('multer'); // <--- NUEVO: Para procesar los audios subidos
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
+
+// <--- NUEVO: Configurar dónde se guardarán temporalmente los audios
+const upload = multer({ dest: 'uploads/' });
 
 // Middleware para entender JSON en las peticiones HTTP y cabeceras estrictas para el Service Worker
 app.use(express.json());
@@ -18,6 +23,10 @@ app.use(express.static(__dirname, {
         }
     }
 }));
+
+// <--- NUEVO: Permitir que el navegador pueda reproducir los audios de la carpeta uploads
+app.use('/uploads', express.static('uploads'));
+if (!fs.existsSync('uploads')) fs.mkdirSync('uploads');
 
 // --- CONFIGURACIÓN DE WEB PUSH ---
 const publicVapidKey = 'BJMPG84wwiQAVAEAl5a2la4cbpssS6ODOyIsLeh-ea6KhoGiXEXWGw22SxyE6hc6SlO9SQGG9-TV7VDIWJDZojg';
@@ -45,6 +54,23 @@ app.post('/subscribe', (req, res) => {
     }
 });
 
+// <--- NUEVO: RUTA HTTP PARA RECIBIR LA NOTA DE VOZ DESDE EL CLIENTE
+app.post('/upload-voice', upload.single('audio'), (req, res) => {
+    if (!req.file) return res.status(400).json({ error: 'No se recibió audio' });
+
+    const audioUrl = `/uploads/${req.file.filename}`;
+    const user = req.body.user;
+
+    // Transmitir la nota de voz a todos los conectados mediante WebSockets
+    io.emit('chat message', {
+        user: user,
+        audioUrl: audioUrl,
+        isAudio: true
+    });
+
+    res.json({ success: true, audioUrl: audioUrl });
+});
+
 async function translateText(text, sourceLang, targetLang) {
     try {
         const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sourceLang}&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`;
@@ -61,6 +87,9 @@ io.on('connection', (socket) => {
     console.log('¡Un dispositivo se ha conectado!');
 
     socket.on('chat message', async (data) => {
+        // <--- NUEVO: Si es un audio, no hacemos nada aquí porque ya se emitió desde el /upload-voice
+        if (data.isAudio) return;
+
         const { user, text } = data;
         const userName = user.trim().toLowerCase();
         
